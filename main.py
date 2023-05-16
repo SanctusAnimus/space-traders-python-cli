@@ -1,18 +1,16 @@
 from os import getenv
-
+from queue import Empty
 from threading import Thread, get_ident as get_thread_id
 from time import sleep
 
 from dotenv import load_dotenv
 from loguru import logger
 
-from game_state import global_params
-
-from handlers import handle_event
-
-from event_queue import event_queue
 from event_queue import QueueEvent
+from event_queue import event_queue
 from event_queue.event_types import EventType
+from game_state import global_params
+from handlers import handle_event
 
 EXIT_CMD = "exit"
 
@@ -21,7 +19,11 @@ def thread_command_runner():
     thread_id = get_thread_id()
 
     while True:
-        event: QueueEvent = global_params.event_queue.get()
+        global_params.event_queue.update_scheduled()
+        try:
+            event: QueueEvent = global_params.event_queue.get(timeout=0.6)
+        except Empty:
+            continue
 
         if event.event_name == "exit":
             logger.debug(f"[thread {thread_id}] exiting...")
@@ -29,10 +31,10 @@ def thread_command_runner():
 
         logger.debug(f"[thread {thread_id}] executing {event}")
 
-        handle_event(global_params, event)
+        result = handle_event(global_params, event)
         # notify event queue that processing for this event is complete
         # this also notifies all subscribers
-        global_params.event_queue.event_done(event)
+        global_params.event_queue.event_done(event, result)
         # sleeping on a timer to respect rate limits (2r/s)
         # could do it smarter with headers and burst limit handling, but I'm lazy
         sleep(0.6)
@@ -44,15 +46,12 @@ def main():
     _thread = Thread(target=thread_command_runner, daemon=True)
     _thread.start()
 
-    global_params.scheduler.start()
-
     logger.add("exec.log", rotation="1 day", retention="3 days", enqueue=True)
     logger.add("error.log", rotation="1 day", retention="3 days", enqueue=True, level="ERROR")
 
     token = getenv("TOKEN", "undefined")
     is_token_present = token != "undefined"
     logger.info(f"Token: {'found' if is_token_present else 'NOT FOUND'}")
-
 
     if is_token_present:
         global_params.console.rule("Fetching game data", style="red", align="left")
@@ -79,7 +78,7 @@ def main():
             global_params.event_queue.put(EventType.DEFAULT, EXIT_CMD)
             break
         else:
-            logger.debug(f"queueing {command} for executor")
+            # logger.debug(f"queueing {command} for executor")
             event_type_str, event_name, *args = command.split()
 
             try:
@@ -89,7 +88,7 @@ def main():
                 continue
 
             if event_type == EventType.VIEW:
-                logger.debug(f"Executing view event immediately")
+                # logger.debug(f"Executing view event immediately")
                 handle_event(global_params, event_queue.new_event(
                     event_type=event_type,
                     event_name=event_name,
@@ -98,8 +97,8 @@ def main():
             else:
                 global_params.event_queue.put(event_type, event_name, args)
 
+    # wait for processing thread to finish
     _thread.join()
-    global_params.scheduler.shutdown()
     logger.info("...done")
 
 

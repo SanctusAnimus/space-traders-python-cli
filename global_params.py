@@ -1,12 +1,10 @@
 from collections import defaultdict
 from threading import Lock
 
-from apscheduler.schedulers.background import BackgroundScheduler
 from rich.console import Console
 
 from event_queue import EventQueue, event_queue
 from space_traders_api_client import AuthenticatedClient
-
 from space_traders_api_client.models import Agent, Ship, Contract, Faction, Survey
 
 
@@ -22,7 +20,7 @@ class GameState:
 
 
 class GlobalParams:
-    __slots__ = ["lock", "event_queue", "game_state", "console", "client", "scheduler"]
+    __slots__ = ["lock", "event_queue", "game_state", "console", "client"]
 
     def __init__(self):
         self.lock = Lock()
@@ -30,7 +28,6 @@ class GlobalParams:
         self.game_state: GameState = GameState()
 
         self.console = Console()
-        self.scheduler = BackgroundScheduler()
 
         self.client = AuthenticatedClient(
             base_url="https://api.spacetraders.io/v2",

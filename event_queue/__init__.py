@@ -1,8 +1,9 @@
 from collections import defaultdict
-from queue import Queue
+from datetime import datetime, timezone
+from queue import Queue, PriorityQueue, Empty
 from threading import Lock
 from traceback import format_exc
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 from loguru import logger
 
@@ -15,7 +16,10 @@ class EventQueue:
         self.__queue = Queue()
         self.__current_id = 0
         self.__id_lock = Lock()
-        self.__event_lock = Lock()
+        # self.__event_lock = Lock()
+
+        self.__scheduled_lock = Lock()
+        self.__scheduled_events = PriorityQueue()
 
         self.event_subscribers = defaultdict(dict)
 
@@ -38,20 +42,56 @@ class EventQueue:
 
         return event.id
 
-    def event_done(self, event: QueueEvent):
+    def event_done(self, event: QueueEvent, result: bool):
         self.__queue.task_done()
 
-        logger.debug(f"Event Done: {event}")
+        if result is False:
+            logger.debug(f"Failed to handle {event}, notification discarded!")
+            return
 
-        with self.__event_lock:
-            event_type_subscribers = self.event_subscribers.get(event.event_type, {})
-            subscribers = event_type_subscribers.get(event.event_name, None)
+        # with self.__event_lock:
+        event_type_subscribers = self.event_subscribers.get(event.event_type, {})
+        subscribers = event_type_subscribers.get(event.event_name, None)
 
-            for subscriber in subscribers or []:
+        for subscriber in subscribers or []:
+            try:
+                subscriber(event)
+            except Exception as e:
+                logger.error(f"EXCEPTION IN QUEUE: {e}\n{format_exc()}")
+
+    def schedule(self, when: datetime, event: QueueEvent | Iterable[QueueEvent]):
+        if type(event) is not QueueEvent:
+            logger.debug(f"Scheduled multiple events at {when}")
+            for _event in event:
+                self.schedule(when, _event)
+        else:
+            logger.debug(f"Scheduled {event} to enqueue {when}")
+            # while put itself is threadsafe, we're reading index in update
+            # which is NOT threadsafe as we can't access internal locks of queue reliably
+            # guarding with own lock instead
+            with self.__scheduled_lock:
+                self.__scheduled_events.put((when, event))
+
+    def update_scheduled(self):
+        current_time = datetime.now(tz=timezone.utc)
+        while True:
+            with self.__scheduled_lock:
                 try:
-                    subscriber(event)
-                except Exception as e:
-                    logger.error(f"EXCEPTION IN QUEUE: {e}\n{format_exc()}")
+                    scheduled = self.__scheduled_events.queue[0]
+                except (Empty, IndexError):
+                    break
+
+                # if the first-fetched item is in the future, the rest will be as well
+                # (because schedule is priority queue)
+                # so we can stop checking items at this point
+                # otherwise process item and proceed with the next iteration
+                if scheduled[0] > current_time:
+                    break
+
+                self.__scheduled_events.get()
+                # logger.debug(f"Re-queueing scheduled event - {scheduled}")
+                self.__queue.put(scheduled[1])
+                self.__scheduled_events.task_done()
 
     def subscribe(self, event_type: EventType, event_name: str, callback: Callable):
         if event_name not in self.event_subscribers[event_type]:

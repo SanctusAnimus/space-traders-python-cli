@@ -1,18 +1,16 @@
-from space_traders_api_client.models.ship import Ship
-from space_traders_api_client.models.ship_nav import ShipNavStatus
-from space_traders_api_client.models.agent import Agent
-from space_traders_api_client.models.contract import Contract
-from space_traders_api_client.models.waypoint import Waypoint, Unset
-
-from rich.console import Console
-from rich.table import Table
-from rich.columns import Columns
-from rich.panel import Panel
-
 from datetime import datetime, timezone, timedelta
-
 from typing import Iterable
 
+from rich.columns import Columns
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
+from space_traders_api_client.models.agent import Agent
+from space_traders_api_client.models.contract import Contract
+from space_traders_api_client.models.ship import Ship
+from space_traders_api_client.models.ship_nav import ShipNavStatus
+from space_traders_api_client.models.waypoint import Waypoint, Unset
 
 SUCCESS_PREFIX = f"\[[green b u]Success[/]] | "  # noqa
 FAIL_PREFIX = f"\[[red b u]Fail[/]] | "  # noqa
@@ -106,8 +104,6 @@ def print_agent(console: Console, agent: Agent):
 def print_ship(console: Console, ship: Ship):
     current_time = datetime.now(tz=timezone.utc)
     route = ship.nav.route
-    print(current_time, route.arrival)
-    print(route.arrival - current_time)
 
     extra_string = ""
 

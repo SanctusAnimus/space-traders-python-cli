@@ -21,9 +21,9 @@ class ViewHandler:
             "waypoint": self.view_waypoint,
             "system": self.view_system,
             "market": self.view_market,
-            "shipyard": self.view_shipyard
+            "shipyard": self.view_shipyard,
+            "surveys": self.view_surveys,
         }
-
     @staticmethod
     def view_ship(params: GlobalParams, event: QueueEvent):
         ship_symbol = event.args[0]
@@ -80,3 +80,9 @@ class ViewHandler:
             pprint(result.data)
         else:
             params.console.print(f"{FAIL_PREFIX}Failed to fetch system {system} shipyard")
+
+
+    @staticmethod
+    def view_surveys(params: GlobalParams, event: QueueEvent):
+        with params.lock:
+            pprint(params.game_state.surveys)

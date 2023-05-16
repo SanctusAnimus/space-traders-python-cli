@@ -1,13 +1,11 @@
 import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Type, TypeVar
+from typing import Any, Dict, List, Type, TypeVar
 
 import attr
 from dateutil.parser import isoparse
 
-from ..models.survey_size import SurveySize
-
 from ..models.survey_deposit import SurveyDeposit
-
+from ..models.survey_size import SurveySize
 
 T = TypeVar("T", bound="Survey")
 
@@ -44,7 +42,8 @@ class Survey:
 
             deposits.append(deposits_item)
 
-        expiration = self.expiration.isoformat()
+        microseconds = str(self.expiration.microsecond).strip("0")
+        expiration = self.expiration.strftime(f"%Y-%m-%dT%H:%M:%S.{microseconds}Z")
 
         size = self.size.value
 

@@ -1,11 +1,11 @@
 from rich.pretty import pprint
 
-from event_queue import QueueEvent, event_queue
+from event_queue import QueueEvent
 from global_params import GlobalParams
 from printers import print_contracts, SUCCESS_PREFIX, FAIL_PREFIX
 from space_traders_api_client.api.contracts import get_contracts, accept_contract, fulfill_contract, deliver_contract
-
 from space_traders_api_client.models.deliver_contract_json_body import DeliverContractJsonBody
+from strategies.base_contract import BaseContractStrategy
 
 
 class ContractHandler:
@@ -17,15 +17,40 @@ class ContractHandler:
             "fetch_all": self.fetch_all,
             "deliver": self.deliver,
             "fulfill": self.fulfill,
+            "strategy": self.initiate_strategy,
+            "assign_ship": self.assign_strategy_ship,
+            "assign_survey": self.assign_strategy_survey,
         }
 
-        event_queue.subscribe("ships", "extract", self.on_extract)
+        self.active_strategy: dict[str, BaseContractStrategy] = {}
 
-    def on_extract(self, extract_event: QueueEvent):
-        print(f"extract event complete - {extract_event}")
+    def initiate_strategy(self, params: GlobalParams, event: QueueEvent):
+        contract_id = event.args[0]
+        asteroid_symbol = event.args[1]
 
-    def initiate_strategy(self):
-        pass
+        if contract_id in self.active_strategy:
+            params.console.print(f"{FAIL_PREFIX}Already have active strategy for contract [b]{contract_id}[/]")
+            return
+
+        with params.lock:
+            contract = params.game_state.contracts.get(contract_id, None)
+            if contract is None:
+                params.console.print(f"{FAIL_PREFIX}No contract with id [b]{contract_id}[/]")
+                return
+
+        self.active_strategy[contract_id] = BaseContractStrategy(params, contract_id, asteroid_symbol)
+
+    def assign_strategy_ship(self, params: GlobalParams, event: QueueEvent):
+        contract_id = event.args[0]
+        ship_symbol = event.args[1]
+        # TODO: validate ship
+        self.active_strategy[contract_id].assign_ship(ship_symbol)
+
+    def assign_strategy_survey(self, params: GlobalParams, event: QueueEvent):
+        contract_id = event.args[0]
+        survey_signature = event.args[1]
+        # TODO: validate survey
+        self.active_strategy[contract_id].set_survey(survey_signature)
 
     @staticmethod
     def accept(params: GlobalParams, event: QueueEvent):
@@ -39,6 +64,9 @@ class ContractHandler:
                 params.game_state.contracts[result_contract.id] = result_contract
             params.console.print(f"{SUCCESS_PREFIX}Accepted contract [b]{result_contract.id}[/]")
             pprint(result.data.contract)
+
+            # maybe auto-initiate strategy?
+            # may be worth to automate contract accepting too!
         else:
             params.console.print(f"{FAIL_PREFIX}Failed to accept contract")
 
@@ -71,7 +99,7 @@ class ContractHandler:
             with params.lock:
                 params.game_state.contracts[contract_id] = result.data.contract
                 params.game_state.ships[ship_symbol].cargo = result.data.cargo
-            params.console.print(f"{SUCCESS_PREFIX}Delivered [u]{trade_symbol}[/] x {units} for contract {contract_id}")
+            params.console.print(f"{SUCCESS_PREFIX}Delivered [b]{units}[/] [u]{trade_symbol}[/] for contract [b]{contract_id}[/]")
 
     @staticmethod
     def fetch_all(params: GlobalParams, event: QueueEvent):
