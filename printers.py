@@ -16,8 +16,9 @@ from space_traders_api_client.models.ship_nav import ShipNavStatus
 from space_traders_api_client.models.shipyard import Shipyard
 from space_traders_api_client.models.waypoint import Waypoint, Unset
 
-SUCCESS_PREFIX = f"[white on green]Success[/] ┃ "  # noqa
-FAIL_PREFIX = f"[black on red]Fail[/] ┃ "  # noqa
+SUCCESS_PREFIX = f"[white on green]SUCCESS[/] ┃ "  # noqa
+FAIL_PREFIX = f"[black on red] FAIL  [/] ┃ "  # noqa
+INFO_PREFIX = f"[white on blue] INFO  [/] ┃ "  # noqa
 
 TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
@@ -81,7 +82,7 @@ def print_ships(ships: Iterable[Ship]):
 
 def print_waypoints(waypoints: Iterable[Waypoint]):
     table = Table(header_style="custom_table_header", show_lines=True)
-    table.add_column("Symbol", style="waypoint")
+    table.add_column("Symbol")
     table.add_column("Type")
     table.add_column("Coords", style="green")
     table.add_column("Orbitals")
@@ -94,7 +95,7 @@ def print_waypoints(waypoints: Iterable[Waypoint]):
         chart = "Known" if not isinstance(waypoint.chart, Unset) else "Unset"
 
         table.add_row(
-            waypoint.symbol,
+            f"[waypoint]{waypoint.symbol}[/]",
             str(waypoint.type),
             f"{waypoint.x} : {waypoint.y}",
             orbitals,
@@ -107,7 +108,7 @@ def print_waypoints(waypoints: Iterable[Waypoint]):
 
 def print_agent(agent: Agent):
     console.print(f"""
-[bold magenta]Agent[/]: [agent]{agent.symbol} | {agent.symbol}[/]
+[bold magenta]Agent[/]: [agent]{agent.symbol} | {agent.account_id}[/]
 [bold magenta]Credits[/]: [b]{agent.credits_}[/]
     """.strip())
 

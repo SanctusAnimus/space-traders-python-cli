@@ -13,14 +13,11 @@ from rich.pretty import pprint
 from event_queue import event_queue
 from event_queue.event_types import EventType
 from event_queue.queue_event import QueueEvent
-from global_params import GlobalParams
+from global_params import GlobalParams, RESERVED_ITEMS
 from space_traders_api_client.models.ship import Ship
 from space_traders_api_client.models.ship_nav_status import ShipNavStatus
 from space_traders_api_client.types import UNSET, Unset
-
-RESERVED_ITEMS = {
-    "ANTIMATTER": True
-}
+from strategies.base_strategy import queue_create_survey, queue_dock, queue_refuel, queue_navigate
 
 
 # TODO: prevent extraction if cargo is full
@@ -119,24 +116,11 @@ class BaseContractStrategy:
                 contract_items[item.symbol] = item.units
             # everything else is sold
             else:
-                self.__params.event_queue.put(
+                event_queue.put(
                     EventType.SHIP, "sell_cargo_item", (ship.symbol, item.symbol, item.units)
                 )
 
         return contract_items
-
-    def __create_survey(self, ship_symbol: str, when: datetime | None = None):
-        if when is not None:
-            events = self.__params.event_queue.new_events_from(
-                (EventType.SHIP, "orbit", [ship_symbol]),
-                (EventType.SHIP, "survey", [ship_symbol])
-            )
-            self.__params.event_queue.schedule(when, events)
-            return
-
-        # make sure we are in orbit (slightly suboptimal, wastes rps if we are already orbiting)
-        self.__params.event_queue.put(EventType.SHIP, "orbit", [ship_symbol])
-        self.__params.event_queue.put(EventType.SHIP, "survey", [ship_symbol, ])
 
     def __get_extract_payload(self, ship_symbol):
         current_datetime = datetime.now(tz=timezone.utc)
@@ -149,33 +133,24 @@ class BaseContractStrategy:
         return [ship_symbol, ]
 
     def __extract(self, ship_symbol: str, when: datetime | None = None):
-        event = self.__params.event_queue.new_event(
+        event = event_queue.new_event(
             EventType.SHIP, "extract", self.__get_extract_payload(ship_symbol)
         )
         if when is not None:
-            self.__params.event_queue.schedule(when, event)
+            event_queue.schedule(when, event)
         else:
-            self.__params.event_queue.put(event=event)
+            event_queue.put(event=event)
         self.__pending_extracts[event.id] = ship_symbol
 
     def __navigate(self, ship_symbol: str, waypoint: str, when: datetime | None = None):
-        event = self.__params.event_queue.new_event(
+        event = event_queue.new_event(
             EventType.SHIP, "navigate", [ship_symbol, waypoint]
         )
         if when is not None:
-            self.__params.event_queue.schedule(when, event)
+            event_queue.schedule(when, event)
         else:
-            self.__params.event_queue.put(event=event)
+            event_queue.put(event=event)
         self.__pending_navigates[event.id] = ship_symbol
-
-    def __dock(self, ship_symbol: str, when: datetime | None = None):
-        event = self.__params.event_queue.new_event(
-            EventType.SHIP, "dock", [ship_symbol]
-        )
-        if when is not None:
-            self.__params.event_queue.schedule(when, event)
-        else:
-            self.__params.event_queue.put(event=event)
 
     def on_create_survey(self, event: QueueEvent):
         ship_symbol = self.assigned_surveyor
@@ -210,10 +185,10 @@ class BaseContractStrategy:
             # if a suitable survey is found, schedule mining;
             # otherwise schedule another try
             if self.survey_signature is not None:
-                self.__dock(ship_symbol, when)
+                queue_dock(ship_symbol, when)
                 self.__extract(ship_symbol, when)
             else:
-                self.__create_survey(ship_symbol, when)
+                queue_create_survey(ship_symbol, when)
 
     def on_extract(self, event: QueueEvent):
         ship_symbol = self.__pending_extracts.get(event.id, UNSET)
@@ -270,22 +245,22 @@ class BaseContractStrategy:
                             f"Previously-used survey {self.survey_signature} became invalid, "
                             f"creating new with {ship_symbol}"
                         )
-                        self.__create_survey(ship_symbol, when)
+                        queue_create_survey(ship_symbol, when)
                         return
 
                 self.__extract(ship_symbol, when)
             # enough to deliver; orbit and move to the point
             else:
-                orbit_event = self.__params.event_queue.new_event(EventType.SHIP, "orbit", (ship_symbol,)),
+                orbit_event = event_queue.new_event(EventType.SHIP, "orbit", (ship_symbol,)),
 
                 # have to create navigate explicitly to record into a different pending list
-                navigate_to_deliver_event = self.__params.event_queue.new_event(
+                navigate_to_deliver_event = event_queue.new_event(
                     EventType.SHIP, "navigate", (ship_symbol, delivery_target.waypoint)
                 )
 
                 self.__pending_delivery_navigates[navigate_to_deliver_event.id] = delivery_target
 
-                self.__params.event_queue.schedule(when, (
+                event_queue.schedule(when, (
                     orbit_event, navigate_to_deliver_event
                 ))
 
@@ -305,13 +280,13 @@ class BaseContractStrategy:
             )),
         ]
         if delivery.fulfill:
-            events_payload.append((EventType.CONTRACT, "fulfill", (self.contract_id, )))
+            events_payload.append((EventType.CONTRACT, "fulfill", (self.contract_id,)))
         events_payload.append((EventType.SHIP, "orbit", (ship_symbol,)))
 
-        events = self.__params.event_queue.new_events_from(*events_payload)
-        self.__params.event_queue.schedule(arrival_time, events)
+        events = event_queue.new_events_from(*events_payload)
+        event_queue.schedule(arrival_time, events)
 
-        self.__navigate(ship_symbol, self.__asteroid_field, arrival_time)
+        queue_navigate(ship_symbol, self.__asteroid_field, when=arrival_time, record_to=self.__pending_navigates)
 
         del self.__pending_delivery_navigates[event.id]
 
@@ -334,11 +309,11 @@ class BaseContractStrategy:
             ship = self.__params.game_state.ships[ship_symbol]
             complete_time = ship.nav.route.arrival + timedelta(seconds=10)
 
-        expected_events = self.__params.event_queue.new_events_from(
+        expected_events = event_queue.new_events_from(
             (EventType.SHIP, "dock", (ship_symbol,)),
             (EventType.SHIP, "refuel", (ship_symbol,)),
         )
-        self.__params.event_queue.schedule(complete_time, expected_events)
+        event_queue.schedule(complete_time, expected_events)
         self.__extract(ship_symbol, when=complete_time)
 
         del self.__pending_navigates[event.id]
@@ -360,21 +335,20 @@ class BaseContractStrategy:
                 logger.debug(f"moving ship towards asteroid {ship_symbol}")
                 # handle fuel being not full
                 # handle dock / orbit states
-                self.__navigate(ship_symbol, self.__asteroid_field)
+                queue_navigate(ship_symbol, self.__asteroid_field, record_to=self.__pending_navigates)
             else:
                 if self.assigned_surveyor is not None and ship_symbol == self.assigned_surveyor and self.survey_signature is None:
                     logger.debug(f"creating survey: {ship_symbol}")
-                    self.__create_survey(ship_symbol)
+                    queue_create_survey(ship_symbol)
                     return
 
                 logger.debug(f"initiating mining: {ship_symbol}")
-                # TODO: dock only if needed
                 if ship.nav.status == ShipNavStatus.IN_ORBIT:
-                    self.__params.event_queue.put(EventType.SHIP, "dock", [ship_symbol])
+                    queue_dock(ship_symbol)
 
                 # refuel only if needed - saving rps
                 if ship.fuel.current < ship.fuel.capacity:
-                    self.__params.event_queue.put(EventType.SHIP, "refuel", [ship_symbol])
+                    queue_refuel(ship_symbol)
 
                 self.__extract(ship_symbol)
 

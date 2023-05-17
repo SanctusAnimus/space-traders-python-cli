@@ -3,7 +3,7 @@ from os import getenv
 from loguru import logger
 
 from event_queue import event_queue
-from event_queue.queue_event import QueueEvent
+from event_queue.queue_event import QueueEvent, EventType
 from global_params import GlobalParams
 from printers import SUCCESS_PREFIX
 from space_traders_api_client.api.agents import get_my_agent
@@ -13,7 +13,7 @@ from space_traders_api_client.models.register_json_body import RegisterJsonBody,
 
 
 class AgentHandler:
-    event_type = "agent"
+    event_type = EventType.AGENT
 
     def __init__(self):
         self.handlers = {

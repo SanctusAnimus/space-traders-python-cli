@@ -7,6 +7,7 @@ class EventType(str, Enum):
     AGENT = "agent"
     SYSTEM = "system"
     VIEW = "view"
+    STRATEGY = "strategy"
 
     DEFAULT = "default"
 

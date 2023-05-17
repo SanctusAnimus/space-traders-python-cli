@@ -5,22 +5,34 @@ from dateutil.parser import isoparse
 from loguru import logger
 from rich.pretty import pprint
 
-from event_queue.queue_event import QueueEvent
+from event_queue.queue_event import QueueEvent, EventType
 from global_params import GlobalParams
 from printers import print_ships, SUCCESS_PREFIX
 from space_traders_api_client.api.fleet import create_survey
 from space_traders_api_client.api.fleet import (
-    get_my_ships, purchase_ship, navigate_ship, dock_ship, refuel_ship, orbit_ship, extract_resources, sell_cargo
+    get_my_ships, purchase_ship, navigate_ship, dock_ship, refuel_ship, orbit_ship, extract_resources, sell_cargo,
+    purchase_cargo
 )
 from space_traders_api_client.models.extract_resources_json_body import ExtractResourcesJsonBody, Unset
 from space_traders_api_client.models.navigate_ship_json_body import NavigateShipJsonBody
+from space_traders_api_client.models.purchase_cargo_purchase_cargo_request import PurchaseCargoPurchaseCargoRequest
 from space_traders_api_client.models.purchase_ship_json_body import PurchaseShipJsonBody, ShipType
 from space_traders_api_client.models.sell_cargo_sell_cargo_request import SellCargoSellCargoRequest
+from space_traders_api_client.models.ship import Ship
 from space_traders_api_client.models.survey import Survey, SurveySize, SurveyDeposit
 
 
+def get_cargo_space(ship: Ship) -> int:
+    cargo_capacity = ship.cargo.capacity
+
+    for item in ship.cargo.inventory:
+        cargo_capacity -= item.units
+
+    return cargo_capacity
+
+
 class ShipHandler:
-    event_type = "ships"
+    event_type = EventType.SHIP
 
     def __init__(self):
         self.handlers = {
@@ -31,6 +43,7 @@ class ShipHandler:
             "refuel": self.refuel,
             "purchase": self.purchase,
             "sell_cargo_item": self.sell_cargo_item,
+            "buy_cargo_item": self.buy_cargo_item,
             "fetch_all": self.fetch_all,
             "survey": self.create_survey_method,
             "load_survey": self.load_survey,
@@ -152,8 +165,18 @@ class ShipHandler:
     @staticmethod
     def sell_cargo_item(params: GlobalParams, event: QueueEvent):
         ship_symbol = event.args[0]
-
         symbol = event.args[1]
+        units = event.args[2]
+
+        # if -1 is set, event desires to sell all units of resource - determine how much
+        if units == -1:
+            with params.lock:
+                ship = params.game_state.ships[ship_symbol]
+                for resource in ship.cargo.inventory:
+                    if resource.symbol == symbol:
+                        units = resource.units
+                        break
+        logger.debug(f"Selling -1 {symbol} = {units}")
 
         if symbol == "ANTIMATTER":
             logger.debug(f"TRIED TO SELL ANTIMATTER")
@@ -161,7 +184,7 @@ class ShipHandler:
 
         body = SellCargoSellCargoRequest(
             symbol=symbol,
-            units=int(event.args[2])
+            units=units
         )
         result = sell_cargo.sync(client=params.client, ship_symbol=ship_symbol, json_body=body)
         with params.lock:
@@ -169,15 +192,40 @@ class ShipHandler:
             params.game_state.agent = result.data.agent
             ship.cargo = result.data.cargo
 
-            transaction = result.data.transaction
-            params.console.print(
-                f"{SUCCESS_PREFIX}[ship]{ship_symbol}[/] sold {transaction.units} "
-                f"[resource]{transaction.trade_symbol}[/] "
-                f"for {transaction.total_price} ({transaction.price_per_unit} per unit)"
-            )
+        transaction = result.data.transaction
+        params.console.print(
+            f"{SUCCESS_PREFIX}[ship]{ship_symbol}[/] sold {transaction.units} "
+            f"[resource]{transaction.trade_symbol}[/] "
+            f"for ${transaction.total_price} (${transaction.price_per_unit} per unit)"
+        )
 
-            # print_agent(params.console, result.data.agent)
-            # print_ship(params.console, ship)
+    @staticmethod
+    def buy_cargo_item(params: GlobalParams, event: QueueEvent):
+        ship_symbol = event.args[0]
+        resource_symbol = event.args[1]
+        units = event.args[2]
+
+        # if -1 is set, event desires to buy full cargo - determine how much
+        if units == -1:
+            with params.lock:
+                ship = params.game_state.ships[ship_symbol]
+                units = get_cargo_space(ship)
+
+        body = PurchaseCargoPurchaseCargoRequest(
+            symbol=resource_symbol,
+            units=units
+        )
+
+        result = purchase_cargo.sync(client=params.client, ship_symbol=ship_symbol, json_body=body)
+        with params.lock:
+            params.game_state.agent = result.data.agent
+            params.game_state.ships[ship_symbol].cargo = result.data.cargo
+
+        transaction = result.data.transaction
+        params.console.print(
+            f"{SUCCESS_PREFIX}[ship]{ship_symbol}[/] purchased {units} [resource]{resource_symbol}[/] "
+            f"for ${transaction.total_price} (${transaction.price_per_unit} per unit)"
+        )
 
     @staticmethod
     def fetch_all(params: GlobalParams, event: QueueEvent):
@@ -225,4 +273,3 @@ class ShipHandler:
                     deposits=[SurveyDeposit(deposit["symbol"]) for deposit in survey["deposits"]]
                 )
                 pprint(params.game_state.surveys)
-

@@ -1,4 +1,4 @@
-from event_queue import QueueEvent
+from event_queue import QueueEvent, EventType
 from global_params import GlobalParams
 from printers import print_ships, print_contracts, FAIL_PREFIX, print_ship, print_agent, print_market, print_shipyard, \
     print_surveys
@@ -8,7 +8,7 @@ from space_traders_api_client.api.systems import (
 
 
 class ViewHandler:
-    event_type = "view"
+    event_type = EventType.VIEW
 
     def __init__(self):
         self.handlers = {

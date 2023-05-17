@@ -1,6 +1,6 @@
 from rich.pretty import pprint
 
-from event_queue import QueueEvent
+from event_queue import QueueEvent, EventType
 from global_params import GlobalParams
 from printers import print_contracts, SUCCESS_PREFIX, FAIL_PREFIX
 from space_traders_api_client.api.contracts import get_contracts, accept_contract, fulfill_contract, deliver_contract
@@ -9,7 +9,7 @@ from strategies.base_contract import BaseContractStrategy
 
 
 class ContractHandler:
-    event_type = "contracts"
+    event_type = EventType.CONTRACT
 
     def __init__(self):
         self.handlers = {

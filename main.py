@@ -38,7 +38,7 @@ def thread_command_runner():
         global_params.event_queue.event_done(event, result)
         # sleeping on a timer to respect rate limits (2r/s)
         # could do it smarter with headers and burst limit handling, but I'm lazy
-        sleep(0.6)
+        sleep(0.55)
 
 
 def main():

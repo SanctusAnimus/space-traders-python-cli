@@ -7,6 +7,7 @@ from global_params import GlobalParams
 from .agent import AgentHandler
 from .contract import ContractHandler
 from .ship import ShipHandler
+from .strategy import StrategyHandler
 from .system import SystemHandler
 from .view import ViewHandler
 
@@ -16,6 +17,7 @@ __HANDLERS = {
     SystemHandler.event_type: SystemHandler(),
     AgentHandler.event_type: AgentHandler(),
     ViewHandler.event_type: ViewHandler(),
+    StrategyHandler.event_type: StrategyHandler()
 }
 
 

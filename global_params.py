@@ -5,6 +5,7 @@ from console import console
 from event_queue import EventQueue, event_queue
 from space_traders_api_client import AuthenticatedClient
 from space_traders_api_client.models import Agent, Ship, Contract, Faction, Survey
+from space_traders_api_client.models.market import Market
 
 
 class GameState:
@@ -16,6 +17,8 @@ class GameState:
     faction: Faction | None
     # waypoint to dict of signature to survey
     surveys: dict[str, dict[str, Survey]] = defaultdict(dict)
+
+    markets: dict[str, Market] = {}
 
 
 class GlobalParams:
@@ -32,3 +35,8 @@ class GlobalParams:
             base_url="https://api.spacetraders.io/v2",
             token="", follow_redirects=True, verify_ssl=True, raise_on_unexpected_status=True, timeout=30
         )
+
+
+RESERVED_ITEMS = {
+    "ANTIMATTER": True
+}

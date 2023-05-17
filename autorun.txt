@@ -1,6 +1,5 @@
-contracts strategy clhn4yrg11a9os60dmkppmbmk X1-DC54-89945X
-contracts assign_strategy_ship clhn4yrg11a9os60dmkppmbmk REASON_ANCE-1
-contracts assign_strategy_ship clhn4yrg11a9os60dmkppmbmk REASON_ANCE-2
-contracts assign_strategy_ship clhn4yrg11a9os60dmkppmbmk REASON_ANCE-3
-contracts assign_strategy_ship clhn4yrg11a9os60dmkppmbmk REASON_ANCE-4
-contracts assign_strategy_ship clhn4yrg11a9os60dmkppmbmk REASON_ANCE-5
+strategy trade REASON_ANCE-1 SILVER_ORE X1-DC54-89945X X1-DC54-43853Z
+strategy trade REASON_ANCE-2 SILVER_ORE X1-DC54-89945X X1-DC54-43853Z
+strategy trade REASON_ANCE-3 COPPER_ORE X1-DC54-89945X X1-DC54-62261X
+strategy trade REASON_ANCE-4 COPPER_ORE X1-DC54-89945X X1-DC54-62261X
+strategy trade REASON_ANCE-5 COPPER_ORE X1-DC54-89945X X1-DC54-62261X
