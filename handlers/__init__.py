@@ -28,18 +28,18 @@ def handle_event(params: GlobalParams, event: QueueEvent) -> bool:
     event_type_handler = __HANDLERS.get(event.event_type, None)
 
     if not event_type_handler:
-        params.console.print(f"NO EVENT TYPE HANDLER FOR {event.event_type}", style="red")
+        logger.error(f"NO EVENT TYPE HANDLER FOR {event.event_type}")
         return False
 
     event_handler = event_type_handler.handlers.get(event.event_name, None)
 
     if not event_handler:
-        params.console.print(f"NO EVENT NAME HANDLER FOR {event.event_name}", style="red")
+        logger.error(f"NO EVENT NAME HANDLER FOR {event.event_name}")
         return False
 
     try:
         event_handler(params, event)
         return True
     except Exception as e:
-        logger.error(f"Error in event runner: {e}\n{format_exc()}")
+        logger.critical(f"Error in event runner: {e}\n{format_exc()}")
         return False

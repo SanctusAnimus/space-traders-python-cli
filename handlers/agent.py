@@ -60,5 +60,5 @@ class AgentHandler:
         with params.lock:
             params.game_state.agent = result.data
         params.console.print(
-            SUCCESS_PREFIX, f"Account: [b u]{result.data.symbol}[/] [gray]{result.data.account_id}[/]"
+           f"{SUCCESS_PREFIX}[bold magenta]Account[/]: [agent]{result.data.symbol}[/] [dim]{result.data.account_id}[/]"
         )

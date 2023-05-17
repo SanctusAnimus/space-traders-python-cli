@@ -26,13 +26,13 @@ class SystemHandler:
         if result.data:
             pprint(result.data)
         else:
-            params.console.print(f"{FAIL_PREFIX}System not found")
+            params.console.print(f"{FAIL_PREFIX}System [system]{system}[/] not found")
 
     @staticmethod
     def fetch_system_waypoints(params: GlobalParams, event: QueueEvent):
         system = event.args[0]
         result = get_system_waypoints.sync(client=params.client, system_symbol=system)
         if result.data:
-            print_waypoints(params.console, result.data)
+            print_waypoints(result.data)
         else:
-            params.console.print(f"{FAIL_PREFIX}Failed to fetch system {system} waypoints")
+            params.console.print(f"{FAIL_PREFIX}Failed to fetch system [system]{system}[/] waypoints")

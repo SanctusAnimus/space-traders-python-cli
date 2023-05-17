@@ -33,10 +33,18 @@ class EventQueue:
 
     def new_event(self, event_type: EventType, event_name: str, args: Any | None = None) -> QueueEvent:
         new_id = self.get_new_id()
-        return QueueEvent(id=new_id, event_name=event_name, args=args, event_type=event_type)
+        return QueueEvent(id=new_id, event_type=event_type, event_name=event_name, args=args)
 
-    def put(self, event_type: EventType, event_name: str, args: Any | None = None) -> int:
-        event = self.new_event(event_type, event_name, args)
+    def new_events_from(self, *src: tuple[EventType, str, Any | None]) -> list[QueueEvent]:
+        return [
+            QueueEvent(id=self.get_new_id(), event_type=event_data[0], event_name=event_data[1], args=event_data[2])
+            for event_data in src
+        ]
+
+    def put(self, event_type: EventType | None = None, event_name: str | None = None, args: Any | None = None,
+            event: QueueEvent | None = None) -> int:
+        if event is None:
+            event = self.new_event(event_type, event_name, args)
 
         self.__queue.put(event)
 

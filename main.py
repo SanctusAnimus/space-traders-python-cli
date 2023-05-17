@@ -1,5 +1,6 @@
 from os import getenv
 from queue import Empty
+from sys import stdout
 from threading import Thread, get_ident as get_thread_id
 from time import sleep
 
@@ -46,6 +47,9 @@ def main():
     _thread = Thread(target=thread_command_runner, daemon=True)
     _thread.start()
 
+    logger.remove(0)  # remove default
+    # only write errors in stdout
+    logger.add(stdout, level="ERROR")
     logger.add("exec.log", rotation="1 day", retention="3 days", enqueue=True)
     logger.add("error.log", rotation="1 day", retention="3 days", enqueue=True, level="ERROR")
 
@@ -60,6 +64,11 @@ def main():
         global_params.event_queue.put(EventType.AGENT, "fetch")
         global_params.event_queue.put(EventType.SHIP, "fetch_all")
         global_params.event_queue.put(EventType.CONTRACT, "fetch_all")
+
+        with open("autorun.txt", "r") as autorun_src:
+            for line in autorun_src:
+                event_type, event_name, *args = line.split()
+                global_params.event_queue.put(EventType(event_type), event_name, args)
     else:
         global_params.console.print(
             f"[red]Token not found (or no valid .env in root).[/]\n"

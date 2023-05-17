@@ -42,7 +42,9 @@ class ShipHandler:
         result = dock_ship.sync(client=params.client, ship_symbol=ship_symbol)
 
         if result.data:
-            params.console.print(f"{SUCCESS_PREFIX}[bold magenta]{ship_symbol}[/] docked at [u]{result.data.nav.waypoint_symbol}[/]")
+            params.console.print(
+                f"{SUCCESS_PREFIX}[ship]{ship_symbol}[/] docked at [waypoint]{result.data.nav.waypoint_symbol}[/]"
+            )
             with params.lock:
                 ship = params.game_state.ships[ship_symbol]
                 ship.nav = result.data.nav
@@ -55,7 +57,7 @@ class ShipHandler:
         result = orbit_ship.sync(client=params.client, ship_symbol=ship_symbol)
         if result.data:
             params.console.print(
-                f"{SUCCESS_PREFIX}[bold magenta]{ship_symbol}[/] entered orbit of [u]{result.data.nav.waypoint_symbol}[/]")
+                f"{SUCCESS_PREFIX}[ship]{ship_symbol}[/] entered orbit of [waypoint]{result.data.nav.waypoint_symbol}[/]")
             with params.lock:
                 ship = params.game_state.ships[ship_symbol]
                 ship.nav = result.data.nav
@@ -74,8 +76,8 @@ class ShipHandler:
         result = navigate_ship.sync(client=params.client, ship_symbol=ship_symbol, json_body=body)
         if result.data:
             route = result.data.nav.route
-            params.console.print(f"{SUCCESS_PREFIX}[bold magenta]{ship_symbol}[/] navigating towards [u]{waypoint}[/]. "
-                                 f"Estimated: [green]{route.arrival - route.departure_time}[/]")
+            params.console.print(f"{SUCCESS_PREFIX}[ship]{ship_symbol}[/] navigating towards [waypoint]{waypoint}[/]. "
+                                 f"Estimated: [duration]{route.arrival - route.departure_time}[/]")
             with params.lock:
                 ship = params.game_state.ships[ship_symbol]
                 ship.nav = result.data.nav
@@ -93,23 +95,29 @@ class ShipHandler:
             with params.lock:
                 waypoint = params.game_state.ships[ship_symbol].nav.waypoint_symbol
                 survey = params.game_state.surveys[waypoint][survey_symbol]
-                # if survey is expired, discard
+                # if a survey is expired, discard
                 if survey.expiration < current_datetime:
                     logger.debug(f"Requested excavate survey {survey_symbol} is expired!")
                     survey = Unset()
         body = ExtractResourcesJsonBody(
             survey=survey
         )
+        # TODO: handle exhausted surveys 400 response somehow
         result = extract_resources.sync(client=params.client, ship_symbol=ship_symbol, json_body=body)
         if result.data:
             extraction_yield = result.data.extraction.yield_
-            params.console.print(f"{SUCCESS_PREFIX}Mined with {ship_symbol}:"
-                                 f" [green]+{extraction_yield.units}[/] [b]{extraction_yield.symbol}[/]. "
-                                 f"Now on cooldown till [red]{result.data.cooldown.expiration}[/]")
+            cooldown = result.data.cooldown
+
+            cooldown_duration = cooldown.expiration - datetime.now(tz=timezone.utc)
+
+            params.console.print(f"{SUCCESS_PREFIX}[ship]{ship_symbol}[/] mined"
+                                 f" {extraction_yield.units} [resource]{extraction_yield.symbol}[/]. "
+                                 f"On cooldown for [cooldown]{cooldown_duration} "
+                                 f"({cooldown.expiration.isoformat(timespec='seconds')})[/]")
             with params.lock:
                 ship = params.game_state.ships[ship_symbol]
                 ship.cargo = result.data.cargo
-                ship.additional_properties["cooldown"] = result.data.cooldown
+                ship.additional_properties["cooldown"] = cooldown
 
     @staticmethod
     def refuel(params: GlobalParams, event: QueueEvent):
@@ -117,7 +125,9 @@ class ShipHandler:
         result = refuel_ship.sync(client=params.client, ship_symbol=ship_symbol)
 
         if result.data:
-            params.console.print(f"{SUCCESS_PREFIX} Refueled {ship_symbol} to {result.data.fuel.current}")
+            params.console.print(
+                f"{SUCCESS_PREFIX}[ship]{ship_symbol}[/] refueled to {result.data.fuel.current}"
+            )
             with params.lock:
                 ship = params.game_state.ships[ship_symbol]
                 ship.fuel = result.data.fuel
@@ -135,7 +145,7 @@ class ShipHandler:
         if result.data:
             new_ship = result.data.ship
             with params.lock:
-                params.console.print(f"{SUCCESS_PREFIX}Purchased ship {new_ship.symbol}")
+                params.console.print(f"{SUCCESS_PREFIX}[ship]{new_ship.symbol}[/] has been purchased!")
                 params.game_state.agent = result.data.agent
                 params.game_state.ships[new_ship.symbol] = new_ship
 
@@ -161,7 +171,8 @@ class ShipHandler:
 
             transaction = result.data.transaction
             params.console.print(
-                f"{SUCCESS_PREFIX}{ship_symbol} sold {transaction.units} [u]{transaction.trade_symbol}[/] "
+                f"{SUCCESS_PREFIX}[ship]{ship_symbol}[/] sold {transaction.units} "
+                f"[resource]{transaction.trade_symbol}[/] "
                 f"for {transaction.total_price} ({transaction.price_per_unit} per unit)"
             )
 
@@ -172,11 +183,11 @@ class ShipHandler:
     def fetch_all(params: GlobalParams, event: QueueEvent):
         result = get_my_ships.sync(client=params.client)
         # NOTE: might need pagination handling in the future
-        params.console.print(SUCCESS_PREFIX, f"Ships: [b][u]{len(result.data)}[/]")
+        params.console.print(f"{SUCCESS_PREFIX}Ships: [b u]{len(result.data)}[/]")
 
         with params.lock:
             params.game_state.ships = {ship.symbol: ship for ship in result.data}
-            print_ships(params.console, result.data)
+            print_ships(result.data)
 
     @staticmethod
     def create_survey_method(params: GlobalParams, event: QueueEvent):
@@ -185,18 +196,24 @@ class ShipHandler:
         with params.lock:
             ship = params.game_state.ships[ship_symbol]
             ship.additional_properties["cooldown"] = result.data.cooldown
-            pprint(result.data.surveys)
+            survey_log_data = []
+
             for survey in result.data.surveys:
                 params.game_state.surveys[survey.symbol][survey.signature] = survey
+                deposits = ", ".join(f"[resource]{deposit.symbol}[/]" for deposit in survey.deposits)
+                survey_log_data.append(f"[waypoint]{survey.signature}[/]([green u]{survey.size}[/]): {deposits}")
 
                 with open(f"surveys/{survey.signature}.json", "w") as target:
                     dump(survey.to_dict(), target)
+
+            survey_log_data = "\n".join(survey_log_data)
+            params.console.print(f"{SUCCESS_PREFIX}[ship]{ship_symbol}[/] created surveys:\n{survey_log_data}")
 
     @staticmethod
     def load_survey(params: GlobalParams, event: QueueEvent):
         survey_name = event.args[0]
 
-        with open(f"surveys/{survey_name}", "r") as src:
+        with open(f"surveys/{survey_name}.json", "r") as src:
             survey = load(src)
 
             with params.lock:
@@ -208,4 +225,4 @@ class ShipHandler:
                     deposits=[SurveyDeposit(deposit["symbol"]) for deposit in survey["deposits"]]
                 )
                 pprint(params.game_state.surveys)
-# X1-DC54-89945X-55250F
+

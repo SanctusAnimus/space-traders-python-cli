@@ -1,8 +1,7 @@
 from collections import defaultdict
 from threading import Lock
 
-from rich.console import Console
-
+from console import console
 from event_queue import EventQueue, event_queue
 from space_traders_api_client import AuthenticatedClient
 from space_traders_api_client.models import Agent, Ship, Contract, Faction, Survey
@@ -27,7 +26,7 @@ class GlobalParams:
         self.event_queue: EventQueue = event_queue
         self.game_state: GameState = GameState()
 
-        self.console = Console()
+        self.console = console
 
         self.client = AuthenticatedClient(
             base_url="https://api.spacetraders.io/v2",

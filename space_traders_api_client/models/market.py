@@ -1,14 +1,11 @@
-from typing import TYPE_CHECKING, Any, Dict, List, Type, TypeVar, Union
+from typing import Any, Dict, List, Type, TypeVar, Union
 
 import attr
 
+from ..models.market_trade_good import MarketTradeGood
+from ..models.market_transaction import MarketTransaction
+from ..models.trade_good import TradeGood
 from ..types import UNSET, Unset
-
-if TYPE_CHECKING:
-    from ..models.market_trade_good import MarketTradeGood
-    from ..models.market_transaction import MarketTransaction
-    from ..models.trade_good import TradeGood
-
 
 T = TypeVar("T", bound="Market")
 

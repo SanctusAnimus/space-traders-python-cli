@@ -18,8 +18,9 @@ class ContractHandler:
             "deliver": self.deliver,
             "fulfill": self.fulfill,
             "strategy": self.initiate_strategy,
-            "assign_ship": self.assign_strategy_ship,
-            "assign_survey": self.assign_strategy_survey,
+            "assign_strategy_ship": self.assign_strategy_ship,
+            "assign_strategy_survey": self.assign_strategy_survey,
+            "assign_strategy_surveyor": self.assign_strategy_surveyor,
         }
 
         self.active_strategy: dict[str, BaseContractStrategy] = {}
@@ -50,7 +51,13 @@ class ContractHandler:
         contract_id = event.args[0]
         survey_signature = event.args[1]
         # TODO: validate survey
-        self.active_strategy[contract_id].set_survey(survey_signature)
+        self.active_strategy[contract_id].assign_survey(survey_signature)
+
+    def assign_strategy_surveyor(self, params: GlobalParams, event: QueueEvent):
+        contract_id = event.args[0]
+        ship_signature = event.args[1]
+        # TODO: validate ship
+        self.active_strategy[contract_id].assign_surveyor(ship_signature)
 
     @staticmethod
     def accept(params: GlobalParams, event: QueueEvent):
@@ -99,7 +106,7 @@ class ContractHandler:
             with params.lock:
                 params.game_state.contracts[contract_id] = result.data.contract
                 params.game_state.ships[ship_symbol].cargo = result.data.cargo
-            params.console.print(f"{SUCCESS_PREFIX}Delivered [b]{units}[/] [u]{trade_symbol}[/] for contract [b]{contract_id}[/]")
+            params.console.print(f"{SUCCESS_PREFIX}[bold magenta]{ship_symbol}[/] delivered [b]{units}[/] [u]{trade_symbol}[/] for contract [b]{contract_id}[/]")
 
     @staticmethod
     def fetch_all(params: GlobalParams, event: QueueEvent):
@@ -110,4 +117,4 @@ class ContractHandler:
             params.game_state.contracts = {
                 contract.id: contract for contract in result.data
             }
-            print_contracts(params.console, params.game_state.contracts.values())
+            print_contracts(params.game_state.contracts.values())

@@ -1,14 +1,11 @@
-from typing import TYPE_CHECKING, Any, Dict, List, Type, TypeVar, Union
+from typing import Any, Dict, List, Type, TypeVar, Union
 
 import attr
 
+from ..models.shipyard_ship import ShipyardShip
+from ..models.shipyard_ship_types_item import ShipyardShipTypesItem
+from ..models.shipyard_transaction import ShipyardTransaction
 from ..types import UNSET, Unset
-
-if TYPE_CHECKING:
-    from ..models.shipyard_ship import ShipyardShip
-    from ..models.shipyard_ship_types_item import ShipyardShipTypesItem
-    from ..models.shipyard_transaction import ShipyardTransaction
-
 
 T = TypeVar("T", bound="Shipyard")
 

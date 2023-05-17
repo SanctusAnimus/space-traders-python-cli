@@ -1,0 +1,6 @@
+contracts strategy clhn4yrg11a9os60dmkppmbmk X1-DC54-89945X
+contracts assign_strategy_ship clhn4yrg11a9os60dmkppmbmk REASON_ANCE-1
+contracts assign_strategy_ship clhn4yrg11a9os60dmkppmbmk REASON_ANCE-2
+contracts assign_strategy_ship clhn4yrg11a9os60dmkppmbmk REASON_ANCE-3
+contracts assign_strategy_ship clhn4yrg11a9os60dmkppmbmk REASON_ANCE-4
+contracts assign_strategy_ship clhn4yrg11a9os60dmkppmbmk REASON_ANCE-5

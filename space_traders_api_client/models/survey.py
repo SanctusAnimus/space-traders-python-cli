@@ -42,8 +42,7 @@ class Survey:
 
             deposits.append(deposits_item)
 
-        microseconds = str(self.expiration.microsecond).strip("0")
-        expiration = self.expiration.strftime(f"%Y-%m-%dT%H:%M:%S.{microseconds}Z")
+        expiration = self.expiration.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
         size = self.size.value
 
