@@ -10,7 +10,8 @@ from loguru import logger
 from event_queue import QueueEvent
 from event_queue import event_queue
 from event_queue.event_types import EventType
-from game_state import global_params
+from global_params import global_params
+from handle_result import HandleResult
 from handlers import handle_event
 
 EXIT_CMD = "exit"
@@ -33,6 +34,10 @@ def thread_command_runner():
         logger.debug(f"[thread {thread_id}] executing {event}")
 
         result = handle_event(global_params, event)
+
+        if result == HandleResult.SKIP:
+            logger.debug(f"{event} has been skipped by handler")
+            continue
         # notify event queue that processing for this event is complete
         # this also notifies all subscribers
         global_params.event_queue.event_done(event, result)
@@ -50,8 +55,8 @@ def main():
     logger.remove(0)  # remove default
     # only write errors in stdout
     logger.add(stdout, level="ERROR")
-    logger.add("exec.log", rotation="1 day", retention="3 days", enqueue=True)
-    logger.add("error.log", rotation="1 day", retention="3 days", enqueue=True, level="ERROR")
+    logger.add("exec.log", rotation="1 day", retention="2 days", enqueue=True)
+    logger.add("error.log", rotation="1 day", retention="2 days", enqueue=True, level="ERROR")
 
     token = getenv("TOKEN", "undefined")
     is_token_present = token != "undefined"
@@ -67,6 +72,8 @@ def main():
 
         with open("autorun.txt", "r") as autorun_src:
             for line in autorun_src:
+                if not line or line.startswith("#") or len(line) < 5:
+                    continue
                 event_type, event_name, *args = line.split()
                 global_params.event_queue.put(EventType(event_type), event_name, args)
     else:
@@ -96,7 +103,7 @@ def main():
                 logger.error(f"Incorrect event type - {event_type_str}! Request skipped")
                 continue
 
-            if event_type == EventType.VIEW:
+            if event_type in (EventType.VIEW, EventType.STRATEGY):
                 # logger.debug(f"Executing view event immediately")
                 handle_event(global_params, event_queue.new_event(
                     event_type=event_type,

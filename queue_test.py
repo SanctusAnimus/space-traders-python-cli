@@ -1,7 +1,9 @@
+"""
 from datetime import datetime, timedelta
 from queue import PriorityQueue
 
 from event_queue.queue_event import QueueEvent
+
 
 current_datetime = datetime.now()
 
@@ -24,3 +26,11 @@ while True:
     item = priority_queue.get()
     print(str(item))
     priority_queue.task_done()
+"""
+from console import console
+from strategies.in_system_trade import TradeRoute
+
+
+t = TradeRoute("IRON_ORE", "X1-DC54-89945X", "X1-DC54-62261X")
+
+console.print(f"testing prints {t}")

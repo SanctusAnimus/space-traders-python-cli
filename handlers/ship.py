@@ -7,18 +7,22 @@ from rich.pretty import pprint
 
 from event_queue.queue_event import QueueEvent, EventType
 from global_params import GlobalParams
+from handle_result import HandleResult
 from printers import print_ships, SUCCESS_PREFIX
 from space_traders_api_client.api.fleet import create_survey
 from space_traders_api_client.api.fleet import (
     get_my_ships, purchase_ship, navigate_ship, dock_ship, refuel_ship, orbit_ship, extract_resources, sell_cargo,
-    purchase_cargo
+    purchase_cargo, jump_ship, patch_ship_nav, create_chart, create_ship_waypoint_scan
 )
 from space_traders_api_client.models.extract_resources_json_body import ExtractResourcesJsonBody, Unset
+from space_traders_api_client.models.jump_ship_json_body import JumpShipJsonBody
 from space_traders_api_client.models.navigate_ship_json_body import NavigateShipJsonBody
+from space_traders_api_client.models.patch_ship_nav_json_body import PatchShipNavJsonBody, ShipNavFlightMode
 from space_traders_api_client.models.purchase_cargo_purchase_cargo_request import PurchaseCargoPurchaseCargoRequest
 from space_traders_api_client.models.purchase_ship_json_body import PurchaseShipJsonBody, ShipType
 from space_traders_api_client.models.sell_cargo_sell_cargo_request import SellCargoSellCargoRequest
 from space_traders_api_client.models.ship import Ship
+from space_traders_api_client.models.ship_nav_status import ShipNavStatus
 from space_traders_api_client.models.survey import Survey, SurveySize, SurveyDeposit
 
 
@@ -47,11 +51,23 @@ class ShipHandler:
             "fetch_all": self.fetch_all,
             "survey": self.create_survey_method,
             "load_survey": self.load_survey,
+            "jump": self.jump,
+            "flight_mode": self.flight_mode,
+            "chart": self.chart,
+            "scan_waypoints": self.scan_waypoints,
         }
 
     @staticmethod
-    def dock(params: GlobalParams, event: QueueEvent):
+    def dock(params: GlobalParams, event: QueueEvent) -> HandleResult | None:
         ship_symbol = event.args[0]
+
+        # skip request and save rps if the ship is already on full fuel
+        with params.lock:
+            ship = params.game_state.ships[ship_symbol]
+            if ship.nav.status == ShipNavStatus.DOCKED:
+                logger.debug(f"{ship_symbol} skipping dock - already docked")
+                return HandleResult.SKIP
+
         result = dock_ship.sync(client=params.client, ship_symbol=ship_symbol)
 
         if result.data:
@@ -62,20 +78,27 @@ class ShipHandler:
                 ship = params.game_state.ships[ship_symbol]
                 ship.nav = result.data.nav
 
-                # print_ship(params.console, ship)
-
     @staticmethod
-    def orbit(params: GlobalParams, event: QueueEvent):
+    def orbit(params: GlobalParams, event: QueueEvent) -> HandleResult | None:
         ship_symbol = event.args[0]
+
+        # skip request and save rps if the ship is already on full fuel
+        with params.lock:
+            ship = params.game_state.ships[ship_symbol]
+            if ship.nav.status == ShipNavStatus.IN_ORBIT:
+                logger.debug(f"{ship_symbol} skipping orbit - already IN_ORBIT")
+                return HandleResult.SKIP
+
         result = orbit_ship.sync(client=params.client, ship_symbol=ship_symbol)
+
         if result.data:
             params.console.print(
-                f"{SUCCESS_PREFIX}[ship]{ship_symbol}[/] entered orbit of [waypoint]{result.data.nav.waypoint_symbol}[/]")
+                f"{SUCCESS_PREFIX}[ship]{ship_symbol}[/] entered orbit of "
+                f"[waypoint]{result.data.nav.waypoint_symbol}[/]"
+            )
             with params.lock:
                 ship = params.game_state.ships[ship_symbol]
                 ship.nav = result.data.nav
-
-                # print_ship(params.console, ship)
 
     @staticmethod
     def navigate(params: GlobalParams, event: QueueEvent):
@@ -133,8 +156,15 @@ class ShipHandler:
                 ship.additional_properties["cooldown"] = cooldown
 
     @staticmethod
-    def refuel(params: GlobalParams, event: QueueEvent):
+    def refuel(params: GlobalParams, event: QueueEvent) -> HandleResult | None:
         ship_symbol = event.args[0]
+
+        with params.lock:
+            ship = params.game_state.ships[ship_symbol]
+            if ship.fuel.current == ship.fuel.capacity:
+                logger.debug(f"{ship_symbol} skipping fuel - already on full fuel")
+                return HandleResult.SKIP
+
         result = refuel_ship.sync(client=params.client, ship_symbol=ship_symbol)
 
         if result.data:
@@ -145,8 +175,6 @@ class ShipHandler:
                 ship = params.game_state.ships[ship_symbol]
                 ship.fuel = result.data.fuel
                 params.game_state.agent = result.data.agent
-
-                # print_ship(params.console, ship)
 
     @staticmethod
     def purchase(params: GlobalParams, event: QueueEvent):
@@ -176,7 +204,10 @@ class ShipHandler:
                     if resource.symbol == symbol:
                         units = resource.units
                         break
-        logger.debug(f"Selling -1 {symbol} = {units}")
+
+        if units <= 0:
+            logger.debug(f"{ship_symbol} tried to buy {units} {symbol}")
+            return HandleResult.SKIP
 
         if symbol == "ANTIMATTER":
             logger.debug(f"TRIED TO SELL ANTIMATTER")
@@ -211,6 +242,10 @@ class ShipHandler:
                 ship = params.game_state.ships[ship_symbol]
                 units = get_cargo_space(ship)
 
+        if units <= 0:
+            logger.debug(f"{ship_symbol} tried to buy {units} {resource_symbol}")
+            return HandleResult.SKIP
+
         body = PurchaseCargoPurchaseCargoRequest(
             symbol=resource_symbol,
             units=units
@@ -229,7 +264,7 @@ class ShipHandler:
 
     @staticmethod
     def fetch_all(params: GlobalParams, event: QueueEvent):
-        result = get_my_ships.sync(client=params.client)
+        result = get_my_ships.sync(client=params.client, limit=20)
         # NOTE: might need pagination handling in the future
         params.console.print(f"{SUCCESS_PREFIX}Ships: [b u]{len(result.data)}[/]")
 
@@ -251,7 +286,7 @@ class ShipHandler:
                 deposits = ", ".join(f"[resource]{deposit.symbol}[/]" for deposit in survey.deposits)
                 survey_log_data.append(f"[waypoint]{survey.signature}[/]([green u]{survey.size}[/]): {deposits}")
 
-                with open(f"surveys/{survey.signature}.json", "w") as target:
+                with open(f"fetched_json_data/surveys/{survey.signature}.json", "w") as target:
                     dump(survey.to_dict(), target)
 
             survey_log_data = "\n".join(survey_log_data)
@@ -273,3 +308,64 @@ class ShipHandler:
                     deposits=[SurveyDeposit(deposit["symbol"]) for deposit in survey["deposits"]]
                 )
                 pprint(params.game_state.surveys)
+
+    @staticmethod
+    def jump(params: GlobalParams, event: QueueEvent):
+        ship_symbol = event.args[0]
+        system_symbol = event.args[1]
+
+        body = JumpShipJsonBody(
+            system_symbol=system_symbol
+        )
+
+        result = jump_ship.sync(client=params.client, ship_symbol=ship_symbol, json_body=body)
+
+        with params.lock:
+            ship = params.game_state.ships[ship_symbol]
+            ship.nav = result.data.nav
+            ship.additional_properties["cooldown"] = result.data.cooldown
+
+            cooldown = result.data.cooldown
+            cooldown_duration = cooldown.expiration - datetime.now(tz=timezone.utc)
+
+            params.console.print(
+                f"{SUCCESS_PREFIX}[ship]{ship_symbol}[/] jumped to [system]{system_symbol}[/]. "
+                f"On cooldown for [cooldown]{cooldown_duration} "
+                f"({cooldown.expiration.isoformat(timespec='seconds')})[/]"
+            )
+
+    @staticmethod
+    def flight_mode(params: GlobalParams, event: QueueEvent):
+        ship_symbol = event.args[0]
+        mode = event.args[1]
+
+        body = PatchShipNavJsonBody(
+            flight_mode=ShipNavFlightMode(mode)
+        )
+        result = patch_ship_nav.sync(client=params.client, ship_symbol=ship_symbol, json_body=body)
+        with params.lock:
+            ship = params.game_state.ships[ship_symbol]
+            ship.nav = result.data
+            params.console.print(f"{SUCCESS_PREFIX}[ship]{ship_symbol} is now in [flight_mode]{mode}[/] flight mode")
+
+    @staticmethod
+    def chart(params: GlobalParams, event: QueueEvent):
+        ship_symbol = event.args[0]
+
+        result = create_chart.sync(client=params.client, ship_symbol=ship_symbol)
+        params.console.print(
+            f"{SUCCESS_PREFIX}[ship]{ship_symbol}[/] created chart [waypoint]{result.data.chart.waypoint_symbol}[/]"
+        )
+
+    @staticmethod
+    def scan_waypoints(params: GlobalParams, event: QueueEvent):
+        ship_symbol = event.args[0]
+
+        result = create_ship_waypoint_scan.sync(client=params.client, ship_symbol=ship_symbol)
+        params.console.print(
+            f"{SUCCESS_PREFIX}[ship]{ship_symbol}[/] scanned waypoints."
+        )
+        with params.lock:
+            ship = params.game_state.ships[ship_symbol]
+            ship.additional_properties["cooldown"] = result.data.cooldown
+        pprint(result.data)

@@ -14,6 +14,7 @@ traders_theme = Theme({
     "agent": "bold bright_cyan",
 
     "ship_status": "yellow u",
+    "flight_mode": "yellow u",
     "custom_table_header": "bold chartreuse3",
 
     "cooldown": "red u",

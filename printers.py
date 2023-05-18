@@ -30,6 +30,12 @@ def __duration_str(d1: datetime, d2: datetime) -> str:
     return str(td)
 
 
+def __format_trait(trait: str):
+    if trait in ["MARKETPLACE", "SHIPYARD"]:
+        return f"[b green]{trait}[/]"
+    return trait
+
+
 def print_contracts(contracts: Iterable[Contract]):
     table = Table(show_header=True, header_style="bold magenta")
     table.add_column("ID", style="white bold")
@@ -54,11 +60,12 @@ def print_contracts(contracts: Iterable[Contract]):
 
 
 def print_ships(ships: Iterable[Ship]):
-    table = Table(show_header=True, header_style="bold magenta")
+    table = Table(show_header=True, header_style="bold magenta", show_lines=True)
     table.add_column("Name", style="ship")
     table.add_column("Role")
     table.add_column("Nav")
     table.add_column("Fuel")
+    table.add_column("Cargo")
 
     current_time = datetime.now(tz=timezone.utc)
 
@@ -67,15 +74,19 @@ def print_ships(ships: Iterable[Ship]):
         # TODO: if we are in transit, but arrival is in the past, display special state (as unconfirmed IN_ORBIT)
         if ship.nav.status == ShipNavStatus.IN_TRANSIT:
             route = ship.nav.route
-            remaining_time = route.arrival - current_time
+            remaining_time = __duration_str(route.arrival, current_time)
 
             nav_data = f"[ship_status]{ship.nav.status}[/] " \
                        f"[waypoint]{route.departure.symbol}[/] => [waypoint]{route.destination.symbol}[/]\n" \
                        f"Arrives at {route.arrival.strftime(TIME_FORMAT)} (in [duration]{remaining_time}[/])"
+
+        cargo_items = "\n".join(f"[b]{item.symbol}[/]: [green]{item.units}[/]" for item in ship.cargo.inventory)
+        cargo_string = f"[bold magenta]Capacity[/]: [bold]{ship.cargo.capacity}, {ship.cargo.units}[/]\n{cargo_items}"
         table.add_row(
             ship.symbol, ship.registration.role,
             nav_data,
-            f"{ship.fuel.current} / {ship.fuel.capacity}"
+            f"{ship.fuel.current} / {ship.fuel.capacity}",
+            cargo_string
         )
     console.print(table)
 
@@ -90,8 +101,8 @@ def print_waypoints(waypoints: Iterable[Waypoint]):
     table.add_column("Chart")
 
     for waypoint in waypoints:
-        orbitals = "\n".join(orbital.symbol for orbital in waypoint.orbitals)
-        traits = "\n".join(trait.symbol for trait in waypoint.traits)
+        orbitals = "\n".join(f"[waypoint]{orbital.symbol}[/]" for orbital in waypoint.orbitals)
+        traits = "\n".join(__format_trait(trait.symbol) for trait in waypoint.traits)
         chart = "Known" if not isinstance(waypoint.chart, Unset) else "Unset"
 
         table.add_row(
@@ -208,6 +219,7 @@ def print_market(market: Market):
 
 
 def print_shipyard(shipyard: Shipyard):
+    # TODO: add speed and fuel to table somewhere (under type?)
     ship_types = "\n".join([ship_type.type for ship_type in shipyard.ship_types])
     sold_ship_types = Panel(ship_types, title=f"Ship types")
 

@@ -4,6 +4,7 @@ from loguru import logger
 
 from event_queue.queue_event import QueueEvent
 from global_params import GlobalParams
+from handle_result import HandleResult
 from .agent import AgentHandler
 from .contract import ContractHandler
 from .ship import ShipHandler
@@ -21,27 +22,21 @@ __HANDLERS = {
 }
 
 
-def get_handle(event_type: str):
-    return __HANDLERS[event_type]
-
-
-# event routing core
-def handle_event(params: GlobalParams, event: QueueEvent) -> bool:
+def handle_event(params: GlobalParams, event: QueueEvent) -> HandleResult:
     event_type_handler = __HANDLERS.get(event.event_type, None)
 
     if not event_type_handler:
         logger.error(f"NO EVENT TYPE HANDLER FOR {event.event_type}")
-        return False
+        return HandleResult.FAIL
 
     event_handler = event_type_handler.handlers.get(event.event_name, None)
 
     if not event_handler:
         logger.error(f"NO EVENT NAME HANDLER FOR {event.event_name}")
-        return False
+        return HandleResult.FAIL
 
     try:
-        event_handler(params, event)
-        return True
+        return event_handler(params, event) or HandleResult.SUCCESS
     except Exception as e:
         logger.critical(f"Error in event runner: {e}\n{format_exc()}")
-        return False
+        return HandleResult.FAIL

@@ -2,6 +2,7 @@ from rich.pretty import pprint
 
 from event_queue import QueueEvent, EventType
 from global_params import GlobalParams
+from handle_result import HandleResult
 from printers import print_contracts, SUCCESS_PREFIX, FAIL_PREFIX
 from space_traders_api_client.api.contracts import get_contracts, accept_contract, fulfill_contract, deliver_contract
 from space_traders_api_client.models.deliver_contract_json_body import DeliverContractJsonBody
@@ -41,10 +42,16 @@ class ContractHandler:
 
         self.active_strategy[contract_id] = BaseContractStrategy(params, contract_id, asteroid_symbol)
 
-    def assign_strategy_ship(self, params: GlobalParams, event: QueueEvent):
+    def assign_strategy_ship(self, params: GlobalParams, event: QueueEvent) -> HandleResult | None:
         contract_id = event.args[0]
         ship_symbol = event.args[1]
-        # TODO: validate ship
+
+        with params.lock:
+            ship = params.game_state.ships.get(ship_symbol, None)
+            if ship is None:
+                params.console.print(f"{FAIL_PREFIX}No ship with symbol [ship]{ship_symbol}[/]")
+                return HandleResult.FAIL
+
         self.active_strategy[contract_id].assign_ship(ship_symbol)
 
     def assign_strategy_survey(self, params: GlobalParams, event: QueueEvent):
@@ -55,9 +62,15 @@ class ContractHandler:
 
     def assign_strategy_surveyor(self, params: GlobalParams, event: QueueEvent):
         contract_id = event.args[0]
-        ship_signature = event.args[1]
-        # TODO: validate ship
-        self.active_strategy[contract_id].assign_surveyor(ship_signature)
+        ship_symbol = event.args[1]
+
+        with params.lock:
+            ship = params.game_state.ships.get(ship_symbol, None)
+            if ship is None:
+                params.console.print(f"{FAIL_PREFIX}No ship with symbol [ship]{ship_symbol}[/]")
+                return HandleResult.FAIL
+
+        self.active_strategy[contract_id].assign_surveyor(ship_symbol)
 
     @staticmethod
     def accept(params: GlobalParams, event: QueueEvent):

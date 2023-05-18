@@ -40,3 +40,5 @@ class GlobalParams:
 RESERVED_ITEMS = {
     "ANTIMATTER": True
 }
+
+global_params = GlobalParams()
