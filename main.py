@@ -7,6 +7,7 @@ from time import sleep
 from dotenv import load_dotenv
 from loguru import logger
 
+from database import bind_db
 from event_queue import QueueEvent
 from event_queue import event_queue
 from event_queue.event_types import EventType
@@ -48,6 +49,7 @@ def thread_command_runner():
 
 def main():
     load_dotenv()
+    bind_db()
 
     _thread = Thread(target=thread_command_runner, daemon=True)
     _thread.start()

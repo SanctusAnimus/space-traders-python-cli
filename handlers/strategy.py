@@ -4,6 +4,7 @@ from os.path import join
 
 from event_queue import QueueEvent, EventType
 from global_params import global_params, GlobalParams
+from handle_result import HandleResult
 from space_traders_api_client.models import Market
 from strategies.in_system_trade import SystemTradeStrategy
 
@@ -19,7 +20,8 @@ class StrategyHandler:
         self.handlers = {
             "trade": self.assign_trade_ship,
             "market_update": self.assign_system_market_updater,
-            "trade_routes": self.construct_trade_routes
+            "trade_routes": self.construct_trade_routes,
+            "assign_ship_standby": self.assign_ship_standby
         }
 
     def assign_trade_ship(self, params: GlobalParams, event: QueueEvent):
@@ -31,12 +33,16 @@ class StrategyHandler:
         with params.lock:
             self.active_strategies["in_system_trade"].assign_ship(ship_symbol, resource, source, target)
 
+        return HandleResult.SKIP
+
     def assign_system_market_updater(self, params: GlobalParams, event: QueueEvent):
         ship_symbol = event.args[0]
         system = event.args[1]
 
         with params.lock:
             self.active_strategies["in_system_trade"].assign_market_updater(ship_symbol, system)
+
+        return HandleResult.SKIP
 
     def construct_trade_routes(self, params: GlobalParams, event: QueueEvent):
         system = event.args[0]
@@ -50,5 +56,13 @@ class StrategyHandler:
                         market = Market.from_dict(load(src))
                         params.game_state.markets[market.symbol] = market
 
-        self.active_strategies["in_system_trade"].__target_system = system
+        self.active_strategies["in_system_trade"].assign_system(system)
         self.active_strategies["in_system_trade"].build_trade_routes()
+
+    def assign_ship_standby(self, params: GlobalParams, event: QueueEvent):
+        ship_symbol = event.args[0]
+
+        with params.lock:
+            self.active_strategies["in_system_trade"].assign_ship_standby(ship_symbol)
+
+        return HandleResult.SKIP

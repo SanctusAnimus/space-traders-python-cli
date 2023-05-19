@@ -1,14 +1,34 @@
-strategy market_update REASON_ANCE-7 X1-DC54
+# strategy market_update REASON_ANCE-7 X1-DC54
+
+# # mark ships as ready to trade when market scan finishes
+# strategy assign_ship_standby REASON_ANCE-1
+# strategy assign_ship_standby REASON_ANCE-6
+# strategy assign_ship_standby REASON_ANCE-8
+# strategy assign_ship_standby REASON_ANCE-9
+# strategy assign_ship_standby REASON_ANCE-A
+# strategy assign_ship_standby REASON_ANCE-B
+# strategy assign_ship_standby REASON_ANCE-D
+# strategy assign_ship_standby REASON_ANCE-E
+# strategy assign_ship_standby REASON_ANCE-F
+# strategy assign_ship_standby REASON_ANCE-10
+# strategy assign_ship_standby REASON_ANCE-11
+# strategy assign_ship_standby REASON_ANCE-12
+# strategy trade_routes X1-DC54
+
+
 # strategy jump_gate_survey REASON_ANCE-C X1-DC54
 
-# maybe consider disabling trade on miner drones - slow and only eats rps, in the future
-strategy trade REASON_ANCE-1 COPPER_ORE X1-DC54-89945X X1-DC54-62261X
-strategy trade REASON_ANCE-2 COPPER_ORE X1-DC54-89945X X1-DC54-62261X
-strategy trade REASON_ANCE-3 COPPER_ORE X1-DC54-89945X X1-DC54-62261X
-strategy trade REASON_ANCE-4 COPPER_ORE X1-DC54-89945X X1-DC54-62261X
-strategy trade REASON_ANCE-5 COPPER_ORE X1-DC54-89945X X1-DC54-62261X
-strategy trade REASON_ANCE-6 COPPER_ORE X1-DC54-89945X X1-DC54-62261X
-strategy trade REASON_ANCE-8 COPPER_ORE X1-DC54-89945X X1-DC54-62261X
-strategy trade REASON_ANCE-9 COPPER_ORE X1-DC54-89945X X1-DC54-62261X
-strategy trade REASON_ANCE-A COPPER_ORE X1-DC54-89945X X1-DC54-62261X
-strategy trade REASON_ANCE-B COPPER_ORE X1-DC54-89945X X1-DC54-62261X
+# # ore hounds
+# strategy trade REASON_ANCE-1 AMMONIA_ICE X1-DC54-89945X X1-DC54-36272B
+# strategy trade REASON_ANCE-6 AMMONIA_ICE X1-DC54-89945X X1-DC54-36272B
+# strategy trade REASON_ANCE-8 AMMONIA_ICE X1-DC54-89945X X1-DC54-36272B
+# strategy trade REASON_ANCE-9 AMMONIA_ICE X1-DC54-89945X X1-DC54-36272B
+# strategy trade REASON_ANCE-A AMMONIA_ICE X1-DC54-89945X X1-DC54-36272B
+# strategy trade REASON_ANCE-B AMMONIA_ICE X1-DC54-89945X X1-DC54-36272B
+# strategy trade REASON_ANCE-D AMMONIA_ICE X1-DC54-89945X X1-DC54-36272B
+# strategy trade REASON_ANCE-E AMMONIA_ICE X1-DC54-89945X X1-DC54-36272B
+# strategy trade REASON_ANCE-F AMMONIA_ICE X1-DC54-89945X X1-DC54-36272B
+# strategy trade REASON_ANCE-10 AMMONIA_ICE X1-DC54-89945X X1-DC54-36272B
+# # refiners
+# strategy trade REASON_ANCE-11 AMMONIA_ICE X1-DC54-89945X X1-DC54-36272B
+# strategy trade REASON_ANCE-12 AMMONIA_ICE X1-DC54-89945X X1-DC54-36272B

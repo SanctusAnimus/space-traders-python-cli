@@ -12,18 +12,19 @@ from printers import print_ships, SUCCESS_PREFIX
 from space_traders_api_client.api.fleet import create_survey
 from space_traders_api_client.api.fleet import (
     get_my_ships, purchase_ship, navigate_ship, dock_ship, refuel_ship, orbit_ship, extract_resources, sell_cargo,
-    purchase_cargo, jump_ship, patch_ship_nav, create_chart, create_ship_waypoint_scan
+    purchase_cargo, jump_ship, patch_ship_nav, create_chart, create_ship_waypoint_scan, jettison
 )
-from space_traders_api_client.models.extract_resources_json_body import ExtractResourcesJsonBody, Unset
-from space_traders_api_client.models.jump_ship_json_body import JumpShipJsonBody
-from space_traders_api_client.models.navigate_ship_json_body import NavigateShipJsonBody
-from space_traders_api_client.models.patch_ship_nav_json_body import PatchShipNavJsonBody, ShipNavFlightMode
-from space_traders_api_client.models.purchase_cargo_purchase_cargo_request import PurchaseCargoPurchaseCargoRequest
-from space_traders_api_client.models.purchase_ship_json_body import PurchaseShipJsonBody, ShipType
-from space_traders_api_client.models.sell_cargo_sell_cargo_request import SellCargoSellCargoRequest
-from space_traders_api_client.models.ship import Ship
-from space_traders_api_client.models.ship_nav_status import ShipNavStatus
-from space_traders_api_client.models.survey import Survey, SurveySize, SurveyDeposit
+from space_traders_api_client.models import (
+    ExtractResourcesJsonBody, JumpShipJsonBody, NavigateShipJsonBody,
+    PatchShipNavJsonBody, ShipNavFlightMode,
+    PurchaseCargoPurchaseCargoRequest,
+    PurchaseShipJsonBody, Ship, ShipType, ShipNavStatus,
+    SellCargoSellCargoRequest,
+    Survey, SurveySize, SurveyDeposit,
+    JettisonJsonBody
+)
+from space_traders_api_client.types import Unset
+from strategies.base_strategy import get_resource_count
 
 
 def get_cargo_space(ship: Ship) -> int:
@@ -48,6 +49,7 @@ class ShipHandler:
             "purchase": self.purchase,
             "sell_cargo_item": self.sell_cargo_item,
             "buy_cargo_item": self.buy_cargo_item,
+            "jettison_cargo_item": self.jettison_cargo_item,
             "fetch_all": self.fetch_all,
             "survey": self.create_survey_method,
             "load_survey": self.load_survey,
@@ -200,13 +202,10 @@ class ShipHandler:
         if units == -1:
             with params.lock:
                 ship = params.game_state.ships[ship_symbol]
-                for resource in ship.cargo.inventory:
-                    if resource.symbol == symbol:
-                        units = resource.units
-                        break
+                units = get_resource_count(ship.cargo.inventory, symbol)
 
         if units <= 0:
-            logger.debug(f"{ship_symbol} tried to buy {units} {symbol}")
+            logger.debug(f"{ship_symbol} tried to buy {units} {symbol} - skip")
             return HandleResult.SKIP
 
         if symbol == "ANTIMATTER":
@@ -243,7 +242,7 @@ class ShipHandler:
                 units = get_cargo_space(ship)
 
         if units <= 0:
-            logger.debug(f"{ship_symbol} tried to buy {units} {resource_symbol}")
+            logger.debug(f"{ship_symbol} tried to buy {units} {resource_symbol} - skip")
             return HandleResult.SKIP
 
         body = PurchaseCargoPurchaseCargoRequest(
@@ -260,6 +259,35 @@ class ShipHandler:
         params.console.print(
             f"{SUCCESS_PREFIX}[ship]{ship_symbol}[/] purchased {units} [resource]{resource_symbol}[/] "
             f"for ${transaction.total_price} (${transaction.price_per_unit} per unit)"
+        )
+
+    @staticmethod
+    def jettison_cargo_item(params: GlobalParams, event: QueueEvent):
+        ship_symbol = event.args[0]
+        resource_symbol = event.args[1]
+        units = event.args[2]
+
+        # if -1 is set, event desires to buy full cargo - determine how much
+        if units == -1:
+            with params.lock:
+                ship = params.game_state.ships[ship_symbol]
+                units = get_resource_count(ship.cargo.inventory, resource_symbol)
+
+        if units <= 0:
+            logger.debug(f"{ship_symbol} tried to jettison {units} {resource_symbol} - skip")
+            return HandleResult.SKIP
+
+        body = JettisonJsonBody(
+            symbol=resource_symbol,
+            units=units
+        )
+
+        result = jettison.sync(client=params.client, ship_symbol=ship_symbol, json_body=body)
+        with params.lock:
+            params.game_state.ships[ship_symbol].cargo = result.data.cargo
+
+        params.console.print(
+            f"{SUCCESS_PREFIX}[ship]{ship_symbol}[/] jettisoned {units} [resource]{resource_symbol}[/]"
         )
 
     @staticmethod
@@ -339,6 +367,12 @@ class ShipHandler:
         ship_symbol = event.args[0]
         mode = event.args[1]
 
+        with params.lock:
+            ship = params.game_state.ships[ship_symbol]
+            if ship.nav.flight_mode == ShipNavFlightMode(mode):
+                logger.debug(f"{ship_symbol} already in {mode} - skip")
+                return HandleResult.SKIP
+
         body = PatchShipNavJsonBody(
             flight_mode=ShipNavFlightMode(mode)
         )
@@ -346,7 +380,7 @@ class ShipHandler:
         with params.lock:
             ship = params.game_state.ships[ship_symbol]
             ship.nav = result.data
-            params.console.print(f"{SUCCESS_PREFIX}[ship]{ship_symbol} is now in [flight_mode]{mode}[/] flight mode")
+            params.console.print(f"{SUCCESS_PREFIX}[ship]{ship_symbol}[/] is now in [flight_mode]{mode}[/] flight mode")
 
     @staticmethod
     def chart(params: GlobalParams, event: QueueEvent):

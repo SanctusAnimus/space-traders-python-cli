@@ -106,6 +106,13 @@ def queue_fetch_market(waypoint_symbol: str, when: datetime | None = None,
         record_to[event.id] = waypoint_symbol
 
 
+def queue_jettison_cargo(ship_symbol: str, resource_symbol: str, units: int, when: datetime | None = None):
+    event = event_queue.new_event(
+        EventType.SHIP, "jettison_cargo_item", [ship_symbol, resource_symbol, units]
+    )
+    __when_handler(event, when)
+
+
 def load_system_waypoints(system_name: str) -> list[Waypoint] | None:
     # TODO: this should be handled by the database!!
     try:
